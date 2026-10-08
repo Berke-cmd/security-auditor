@@ -9,12 +9,10 @@ from typing import Any, Dict, List, Optional
 from bs4 import BeautifulSoup
 from fastapi import FastAPI, File, Form, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import JSONResponse
 import httpx
 
 app = FastAPI(title="Security & Defensive Auditor API")
-app = FastAPI(title="Security & Defensive Auditor API")
-
 
 handler = app
 
@@ -45,7 +43,7 @@ SAST_RULES = [
         "pattern": r"(?i)(api[_-]?key|secret[_-]?key|aws[_-]?secret|password|private[_-]?key)\s*[:=]\s*['\"][A-Za-z0-9_\-\.]{12,}['\"]",
         "exts": {".py", ".js", ".jsx", ".ts", ".php"},
         "title": "Sabit Kodlanmış Gizli Anahtar / Parola",
-        "remediation": "Hassas kimlik doğrulama anahtarlarını kodda tutmayın; ortam değişkenleri (.env) kullanın.",
+        "remediation": "Hassas bilgileri kodda tutmayın; ortam değişkenleri (.env) kullanın.",
     },
     {
         "id": "OWASP-A03-01",
@@ -55,7 +53,7 @@ SAST_RULES = [
         "pattern": r"(?i)(execute|query)\s*\(\s*(f['\"].*SELECT|f['\"].*INSERT|f['\"].*UPDATE|\$.*SELECT|\$.*INSERT|\$.*UPDATE)",
         "exts": {".py", ".js", ".ts", ".php"},
         "title": "Dinamik String Birleştirmeli SQL Sorgusu",
-        "remediation": "Parametreli sorgular (Prepared Statements) veya ORM yapıları kullanın.",
+        "remediation": "Parametreli sorgular (Prepared Statements) veya ORM kullanın.",
     },
     {
         "id": "OWASP-A03-02",
@@ -65,7 +63,7 @@ SAST_RULES = [
         "pattern": r"\b(system|shell_exec|exec|passthru|proc_open|eval|subprocess\.(Popen|call|run)\([^)]*shell\s*=\s*True)\s*\(",
         "exts": {".py", ".js", ".ts", ".php"},
         "title": "Güvensiz Sistem / Dinamik Kod Yürütme",
-        "remediation": "Dış sistem komutlarını çalıştırmaktan kaçının; parametreleri dizi olarak güvenli fonksiyonlara iletin.",
+        "remediation": "Dış komut çalıştırmaktan kaçının; parametreleri dizi olarak iletin.",
     },
     {
         "id": "OWASP-A01-01",
@@ -75,7 +73,7 @@ SAST_RULES = [
         "pattern": r"(?i)(header\s*\(['\"]Location:\s*['\"]\s*\.\s*\$_(GET|POST|REQUEST)|redirect\s*\(\s*request\.(args|GET|POST))",
         "exts": {".py", ".php"},
         "title": "Doğrulanmamış URL Yönlendirmesi (Open Redirect)",
-        "remediation": "Yönlendirme öncesinde hedef URL'yi beyaz liste (allowlist) doğrulamasına tabi tutun.",
+        "remediation": "Yönlendirmelerden önce hedef URL'yi beyaz liste (allowlist) ile doğrulayın.",
     },
 ]
 
@@ -99,9 +97,10 @@ WIFI_RULES = [
         "severity": "HIGH",
         "title": "WPS (Wi-Fi Protected Setup) Etkin",
         "detail": "WPS PIN mekanizması kaba kuvvet saldırılarına karşı risklidir.",
-        "remediation": "Yönlendirici ayarlarından WPS özelliğini tamamen devre dışı bırakın.",
+        "remediation": "Yönlendirici ayarlarından WPS özelliğini devre dışı bırakın.",
     },
 ]
+
 
 def audit_zip(zip_path: str) -> List[Dict[str, str]]:
     findings = []
@@ -129,7 +128,9 @@ def audit_zip(zip_path: str) -> List[Dict[str, str]]:
                 rel_path = os.path.relpath(file_path, temp_dir)
 
                 try:
-                    with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                    with open(
+                        file_path, "r", encoding="utf-8", errors="ignore"
+                    ) as f:
                         content = f.read()
                         lines = content.splitlines()
                 except Exception:
@@ -137,13 +138,18 @@ def audit_zip(zip_path: str) -> List[Dict[str, str]]:
 
                 for line_no, line in enumerate(lines, start=1):
                     for rule in SAST_RULES:
-                        if ext in rule["exts"] and re.search(rule["pattern"], line):
+                        if ext in rule["exts"] and re.search(
+                            rule["pattern"], line
+                        ):
                             findings.append({
                                 "severity": rule["severity"],
                                 "owasp": rule["owasp"],
                                 "category": f"SAST / {rule['category']}",
                                 "title": rule["title"],
-                                "detail": f"Dosya: {rel_path} (Satır {line_no})\nKod: {line.strip()[:140]}",
+                                "detail": (
+                                    f"Dosya: {rel_path} (Satır"
+                                    f" {line_no})\nKod: {line.strip()[:140]}"
+                                ),
                                 "remediation": rule["remediation"],
                             })
 
@@ -155,9 +161,13 @@ def audit_zip(zip_path: str) -> List[Dict[str, str]]:
                                 "owasp": "A05:2021 - Security Misconfiguration",
                                 "category": "Wi-Fi & Ağ Altyapısı",
                                 "title": w_rule["title"],
-                                "detail": f"Yapılandırma Dosyası: {rel_path}\nBulgu: {w_rule['detail']}",
+                                "detail": (
+                                    f"Yapılandırma Dosyası: {rel_path}\nBulgu:"
+                                    f" {w_rule['detail']}"
+                                ),
                                 "remediation": w_rule["remediation"],
                             })
+
     return findings
 
 
@@ -167,7 +177,9 @@ async def audit_url(url: str) -> List[Dict[str, str]]:
         url = "https://" + url
 
     try:
-        async with httpx.AsyncClient(verify=True, follow_redirects=True, timeout=8.0) as client:
+        async with httpx.AsyncClient(
+            verify=True, follow_redirects=True, timeout=8.0
+        ) as client:
             res = await client.get(url)
             headers = res.headers
 
@@ -201,7 +213,9 @@ async def audit_url(url: str) -> List[Dict[str, str]]:
                         "owasp": owasp_cat,
                         "category": "Güvenlik Başlığı",
                         "title": f"Eksik Başlık: {header}",
-                        "detail": f"Sunucu yanıtında '{header}' başlığı bulunamadı.",
+                        "detail": (
+                            f"Sunucu yanıtında '{header}' başlığı bulunamadı."
+                        ),
                         "remediation": fix,
                     })
 
@@ -226,7 +240,9 @@ async def audit_url(url: str) -> List[Dict[str, str]]:
                         "detail": "Oturum çerezi JavaScript tarafından okunabilir.",
                         "remediation": "Hassas oturum çerezlerine 'HttpOnly' bayrağı ekleyin.",
                     })
-                if "secure" not in set_cookie.lower() and url.startswith("https"):
+                if "secure" not in set_cookie.lower() and url.startswith(
+                    "https"
+                ):
                     findings.append({
                         "severity": "HIGH",
                         "owasp": "A02:2021 - Cryptographic Failures",
@@ -260,15 +276,8 @@ async def audit_url(url: str) -> List[Dict[str, str]]:
 
     return findings
 
-@app.get("/")
-async def read_index():
-    """Yerel geliştirme sırasında public/index.html dosyasını ekrana basar."""
-    html_path = Path(__file__).resolve().parent.parent / "public" / "index.html"
-    if html_path.exists():
-        return FileResponse(html_path)
-    return {"message": "public/index.html bulunamadi"}
 
-
+@app.post("/scan")
 @app.post("/api/scan")
 async def scan(
     target_url: Optional[str] = Form(None),
