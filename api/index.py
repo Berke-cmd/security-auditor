@@ -13,6 +13,10 @@ from fastapi.responses import FileResponse, JSONResponse
 import httpx
 
 app = FastAPI(title="Security & Defensive Auditor API")
+app = FastAPI(title="Security & Defensive Auditor API")
+
+
+handler = app
 
 app.add_middleware(
     CORSMiddleware,
