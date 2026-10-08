@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Son Kullanıcı ve Güvenlik Paneli</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen py-10 px-4">
+    <div class="max-w-4xl mx-auto">
+        <div class="text-center mb-8">
+            <h1 class="text-3xl font-extrabold text-sky-400">Son Kullanıcı ve Güvenlik Paneli</h1>
+            <p class="text-slate-400 text-sm mt-2">Canlı web sitesi, Wi-Fi/Ağ yapılandırmaları ve kaynak kod arşivi (ZIP) için otomatik denetim ve hata ayıklama platformu</p>
+        </div>
+
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-xl mb-8">
+            <form id="auditForm" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-slate-300 mb-1">Web Sitesi Bağlantısı (İsteğe Bağlı)</label>
+                    <input type="text" id="target_url" name="target_url" placeholder="https://ornekuygulama.com" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-sky-500">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-slate-300 mb-1">Kaynak Kod veya Ağ Ayarları Arşivi (ZIP - İsteğe Bağlı)</label>
+                    <input type="file" id="zip_file" name="zip_file" accept=".zip" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-sm text-slate-300 file:mr-4 file:py-1 file:px-3 file:rounded-md file:border-0 file:bg-sky-600 file:text-white file:text-xs hover:file:bg-sky-500">
+                </div>
+
+                <button type="submit" id="submitBtn" class="w-full bg-sky-600 hover:bg-sky-500 text-white font-semibold py-2.5 rounded-lg transition duration-200">
+                    Kapsamlı Denetimi Başlat
+                </button>
+            </form>
+        </div>
+
+        <div id="loader" class="hidden text-center py-8">
+            <div class="inline-block animate-spin rounded-full h-8 w-8 border-4 border-sky-500 border-t-transparent"></div>
+            <p class="text-slate-400 text-sm mt-3">Güvenlik ve son kullanıcı testleri yürütülüyor, lütfen bekleyin...</p>
+        </div>
+
+        <div id="results" class="hidden space-y-6">
+            <div class="grid grid-cols-4 gap-4 text-center">
+                <div class="bg-slate-900 border border-red-900/50 p-4 rounded-lg">
+                    <span class="text-xs font-bold text-red-400">KRİTİK</span>
+                    <div id="stat-critical" class="text-2xl font-bold text-red-500 mt-1">0</div>
+                </div>
+                <div class="bg-slate-900 border border-orange-900/50 p-4 rounded-lg">
+                    <span class="text-xs font-bold text-orange-400">YÜKSEK</span>
+                    <div id="stat-high" class="text-2xl font-bold text-orange-500 mt-1">0</div>
+                </div>
+                <div class="bg-slate-900 border border-yellow-900/50 p-4 rounded-lg">
+                    <span class="text-xs font-bold text-yellow-400">ORTA</span>
+                    <div id="stat-medium" class="text-2xl font-bold text-yellow-500 mt-1">0</div>
+                </div>
+                <div class="bg-slate-900 border border-cyan-900/50 p-4 rounded-lg">
+                    <span class="text-xs font-bold text-cyan-400">DÜŞÜK</span>
+                    <div id="stat-low" class="text-2xl font-bold text-cyan-500 mt-1">0</div>
+                </div>
+            </div>
+
+            <h2 class="text-lg font-bold text-slate-200">Tespit Edilen Bulgular ve Düzeltme Adımları</h2>
+            <div id="findingsList" class="space-y-4"></div>
+        </div>
+    </div>
+
+    <script>
+        const form = document.getElementById('auditForm');
+        const loader = document.getElementById('loader');
+        const results = document.getElementById('results');
+        const submitBtn = document.getElementById('submitBtn');
+
+        const turkceSeviyeler = {
+            CRITICAL: 'KRİTİK',
+            HIGH: 'YÜKSEK',
+            MEDIUM: 'ORTA',
+            LOW: 'DÜŞÜK'
+        };
+
+        const seviyeStilleri = {
+            CRITICAL: 'bg-red-500/20 text-red-400 border-red-500/30',
+            HIGH: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
+            MEDIUM: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
+            LOW: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30'
+        };
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(form);
+
+            if (!formData.get('target_url') && !formData.get('zip_file').name) {
+                alert('Lütfen analiz için en az bir Web Sitesi Bağlantısı girin veya bir ZIP dosyası yükleyin.');
+                return;
+            }
+
+            loader.classList.remove('hidden');
+            results.classList.add('hidden');
+            submitBtn.disabled = true;
+
+            try {
+                const res = await fetch('/api/scan', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await res.json();
+
+                document.getElementById('stat-critical').innerText = data.stats.CRITICAL || 0;
+                document.getElementById('stat-high').innerText = data.stats.HIGH || 0;
+                document.getElementById('stat-medium').innerText = data.stats.MEDIUM || 0;
+                document.getElementById('stat-low').innerText = data.stats.LOW || 0;
+
+                const list = document.getElementById('findingsList');
+                list.innerHTML = '';
+
+                if (data.findings.length === 0) {
+                    list.innerHTML = '<div class="p-4 bg-emerald-950/40 border border-emerald-800 rounded-lg text-emerald-300 text-center font-medium">Harika! İncelenen girdide herhangi bir kritik zafiyet veya hata tespit edilmedi.</div>';
+                } else {
+                    data.findings.forEach(f => {
+                        const sevKey = (f.severity || 'LOW').toUpperCase();
+                        const rozetMetni = turkceSeviyeler[sevKey] || sevKey;
+                        const badgeClass = seviyeStilleri[sevKey] || 'bg-slate-700 text-slate-300';
+
+                        const card = document.createElement('div');
+                        card.className = 'bg-slate-900 border border-slate-800 rounded-lg p-5 shadow';
+                        card.innerHTML = `
+                            <div class="flex justify-between items-center mb-2">
+                                <span class="px-2.5 py-0.5 rounded text-xs font-bold border ${badgeClass}">${rozetMetni}</span>
+                                <span class="text-xs text-sky-400 font-mono">${f.owasp || 'Genel Güvenlik'}</span>
+                            </div>
+                            <div class="text-xs text-slate-400 mb-1 font-medium">${f.category}</div>
+                            <h3 class="text-base font-semibold text-white mb-2">${f.title}</h3>
+                            <div class="bg-slate-950 p-3 rounded font-mono text-xs text-slate-300 mb-3 whitespace-pre-wrap overflow-x-auto border border-slate-850">${f.detail}</div>
+                            <div class="bg-sky-950/40 border-l-4 border-sky-500 p-3 rounded text-xs text-sky-100">
+                                <strong class="text-sky-300">Savunma / Düzeltme Adımı:</strong> ${f.remediation}
+                            </div>
+                        `;
+                        list.appendChild(card);
+                    });
+                }
+
+                results.classList.remove('hidden');
+            } catch (err) {
+                alert('Tarama sırasında bir bağlantı hatası oluştu: ' + err.message);
+            } finally {
+                loader.classList.add('hidden');
+                submitBtn.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>
